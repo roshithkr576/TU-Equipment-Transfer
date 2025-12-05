@@ -5,17 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Equipment Transfer Form</title>
 
+<!-- jsPDF + html2canvas -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 <style>
     body {
         font-family: Arial, sans-serif;
         background: #eef1f5;
         margin: 0;
-        padding: 20px;
+        padding: 15px;
     }
 
     .container {
         background: #fff;
-        padding: 30px;
+        padding: 25px;
         border: 2px solid #000;
         max-width: 950px;
         margin: auto;
@@ -28,7 +32,11 @@
         align-items: center;
         border-bottom: 2px solid #000;
         padding-bottom: 15px;
-        margin-bottom: 20px;
+    }
+
+    .header-text {
+        text-align: center;
+        flex-grow: 1;
     }
 
     .header-logo {
@@ -36,23 +44,8 @@
         height: auto;
     }
 
-    .header-text {
-        flex-grow: 1;
-        text-align: center;
-    }
-
-    .header-text h2 {
+    .header-text h3, .header-text h4, .header-text h2 {
         margin: 3px 0;
-        font-size: 22px;
-        text-transform: uppercase;
-        font-weight: bold;
-    }
-
-    .header-text h3,
-    .header-text h4 {
-        margin: 0;
-        font-weight: normal;
-        font-size: 15px;
     }
 
     table {
@@ -62,102 +55,81 @@
         margin-top: 15px;
     }
 
-    table, th, td {
-        border: 1px solid black;
+    th, td {
+        border: 1px solid #000;
+        padding: 8px;
     }
 
     th {
         background: #f2f2f2;
-        padding: 8px;
-        text-align: center;
         font-weight: bold;
-    }
-
-    td {
-        padding: 8px;
     }
 
     input, textarea {
         width: 100%;
         border: none;
-        background: transparent;
         outline: none;
-        font-size: 14px;
+        background: transparent;
         resize: none;
+        font-size: 14px;
     }
 
     .item-img {
         width: 100%;
         height: 80px;
         border: 1px solid #ccc;
-        object-fit: contain;
         background: #fafafa;
+        object-fit: contain;
     }
 
     .upload-btn {
-        margin-top: 5px;
-        font-size: 13px;
         width: 100%;
+        font-size: 12px;
+        margin-top: 5px;
     }
 
     .btn {
         background: #0455a4;
-        color: white;
+        color: #fff;
         padding: 12px 20px;
         border: none;
         border-radius: 5px;
-        margin-bottom: 20px;
         cursor: pointer;
         font-size: 16px;
-        float: right;
+        margin-right: 10px;
     }
 
-    .btn:hover {
-        background: #033b75;
-    }
+    .btn:hover { background: #033b75; }
 
-    /* REMOVE BROWSER HEADERS/FOOTERS IN PDF */
-    @page {
-      margin: 12mm !important;
-    }
-    @page {
-      @top-left { content: none !important; }
-      @top-right { content: none !important; }
-      @bottom-left { content: none !important; }
-      @bottom-right { content: none !important; }
-    }
-
-    @media print {
-        .btn, .upload-btn {
-            display: none;
+    /* MOBILE RESPONSIVE */
+    @media(max-width: 650px) {
+        table, thead, tbody, th, td, tr {
+            display: block;
         }
-        body {
-            background: white;
+        th { display: none; }
+        td {
+            border: 1px solid #ddd;
+            margin-bottom: 5px;
+        }
+        .header {
+            flex-direction: column;
+        }
+        .header-logo {
+            margin-bottom: 10px;
         }
     }
 </style>
 
-<script>
-function previewImage(event) {
-    const reader = new FileReader();
-    reader.onload = function() {
-        const img = document.getElementById("equipImg");
-        img.src = reader.result;
-    };
-    reader.readAsDataURL(event.target.files[0]);
-}
-
-function downloadPDF() {
-    window.print();
-}
-</script>
 </head>
 
 <body>
 
-<button class="btn" onclick="downloadPDF()">Download PDF</button>
+<div style="text-align: right; margin-bottom: 15px;">
+    <button class="btn" onclick="addRow()">Add Row</button>
+    <button class="btn" onclick="downloadPDF()">Save as PDF</button>
+</div>
 
-<div class="container">
+<div class="container" id="pdfSection">
 
     <!-- HEADER -->
     <div class="header">
@@ -165,11 +137,12 @@ function downloadPDF() {
             <h3>TU MANAGEMENT INVENTORY DEPARTMENT</h3>
             <h4>Al Ghazal Golf Club, Masdar City, Abu Dhabi</h4>
             <h2>Equipment Transfer Form</h2>
+            <h4><strong>Form No: <span id="formID"></span></strong></h4>
         </div>
 
         <img class="header-logo"
              src="https://tuholdings.ae/wp-content/uploads/2024/06/tu-holding-group-1024x881.png"
-             alt="TU Logo">
+             alt="Logo">
     </div>
 
     <!-- TRANSFER TABLE -->
@@ -183,35 +156,39 @@ function downloadPDF() {
             <td><strong>Department:</strong><input type="text" value="INVENTORY"></td>
         </tr>
         <tr>
-            <td colspan="2"><strong>Transfer Date:</strong><input type="date" value="2025-11-27"></td>
+            <td colspan="2"><strong>Transfer Date:</strong><input type="date"></td>
         </tr>
     </table>
 
     <!-- EQUIPMENT TABLE -->
-    <table>
-        <tr>
-            <th style="width: 5%;">SL</th>
-            <th style="width: 20%;">Image</th>
-            <th>Description</th>
-            <th style="width: 15%;">Qty</th>
-            <th style="width: 20%;">Remarks</th>
-        </tr>
+    <table id="equipmentTable">
+        <thead>
+            <tr>
+                <th style="width:5%;">SL</th>
+                <th style="width:20%;">Image</th>
+                <th>Description</th>
+                <th style="width:15%;">Qty</th>
+                <th style="width:20%;">Remarks</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>1</td>
 
-        <tr>
-            <td>1</td>
+                <td>
+                    <img class="item-img" id="img1" src="">
+                    <input class="upload-btn" type="file" accept="image/*"
+                           onchange="previewImage(event, 'img1')">
+                </td>
 
-            <td>
-                <img id="equipImg" class="item-img" src="" alt="">
-                <input class="upload-btn" type="file" accept="image/*" onchange="previewImage(event)">
-            </td>
-
-            <td><textarea>Canon Office Printer</textarea></td>
-            <td><input type="text" value="1 pcs"></td>
-            <td><textarea></textarea></td>
-        </tr>
+                <td><textarea>Canon Office Printer</textarea></td>
+                <td><input type="text" value="1 pcs"></td>
+                <td><textarea></textarea></td>
+            </tr>
+        </tbody>
     </table>
 
-    <!-- SIGNATURE SECTION -->
+    <!-- SIGNATURE -->
     <table>
         <tr>
             <td><strong>Issued By:</strong><input type="text" value="Roshith"></td>
@@ -230,12 +207,69 @@ function downloadPDF() {
             <td>Signature</td>
         </tr>
         <tr>
-            <td><strong>Receiving Date:</strong><input type="date" value="2025-11-27"></td>
+            <td><strong>Receiving Date:</strong><input type="date"></td>
             <td></td>
         </tr>
     </table>
 
 </div>
+
+<script>
+// AUTO-GENERATE FORM NUMBER
+document.getElementById("formID").innerText =
+    "ETF-" + Date.now().toString().slice(-6);
+
+// IMAGE PREVIEW HANDLER
+function previewImage(event, id) {
+    const reader = new FileReader();
+    reader.onload = function () {
+        document.getElementById(id).src = reader.result;
+    };
+    reader.readAsDataURL(event.target.files[0]);
+}
+
+// ADD MULTIPLE ROWS
+let rowCount = 1;
+
+function addRow() {
+    rowCount++;
+    const table = document.getElementById("equipmentTable").getElementsByTagName("tbody")[0];
+
+    const newRow = document.createElement("tr");
+
+    newRow.innerHTML = `
+        <td>${rowCount}</td>
+        <td>
+            <img class="item-img" id="img${rowCount}" src="">
+            <input type="file" class="upload-btn" accept="image/*"
+                   onchange="previewImage(event, 'img${rowCount}')">
+        </td>
+        <td><textarea></textarea></td>
+        <td><input type="text"></td>
+        <td><textarea></textarea></td>
+    `;
+
+    table.appendChild(newRow);
+}
+
+// DOWNLOAD AS PDF USING jsPDF
+async function downloadPDF() {
+    const { jsPDF } = window.jspdf;
+
+    const element = document.getElementById("pdfSection");
+
+    const canvas = await html2canvas(element, { scale: 2 });
+    const imgData = canvas.toDataURL("image/png");
+
+    let pdf = new jsPDF("p", "mm", "a4");
+    let imgWidth = 210;
+    let imgHeight = canvas.height * imgWidth / canvas.width;
+
+    pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+
+    pdf.save("Equipment_Transfer_Form.pdf");
+}
+</script>
 
 </body>
 </html>
